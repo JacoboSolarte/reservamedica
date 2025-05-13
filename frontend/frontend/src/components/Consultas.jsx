@@ -2,6 +2,32 @@ import { useEffect, useState } from 'react';
 import API from '../api';
 
 export default function Consultas() {
+  // Lista de diagnósticos predefinidos
+  const DIAGNOSTICOS_PREDEFINIDOS = [
+    { value: 'resfriado_comun', label: 'Resfriado común' },
+    { value: 'hipertension_arterial', label: 'Hipertensión arterial' },
+    { value: 'diabetes_mellitus', label: 'Diabetes mellitus' },
+    { value: 'gastritis', label: 'Gastritis' },
+    { value: 'ansiedad_generalizada', label: 'Ansiedad generalizada' },
+    { value: 'lumbalgia', label: 'Lumbalgia' },
+    { value: 'migrana', label: 'Migraña' },
+    { value: 'asma', label: 'Asma' },
+    { value: 'artritis', label: 'Artritis' },
+    { value: 'depresion', label: 'Depresión' },
+    { value: 'influenza', label: 'Influenza (Gripe)' },
+    { value: 'bronquitis_aguda', label: 'Bronquitis aguda' },
+    { value: 'neumonia', label: 'Neumonía' },
+    { value: 'cardiopatia_isquemica', label: 'Cardiopatía isquémica' },
+    { value: 'arritmia_cardiaca', label: 'Arritmia cardíaca' }
+  ];
+
+  const ESTADO_CHOICES = [
+    { value: 'pendiente', label: 'Pendiente' },
+    { value: 'falta', label: 'falta' },
+    { value: 'realizada', label: 'Realizada' }
+  ];
+
+  // Estados del componente
   const [consultas, setConsultas] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [medicos, setMedicos] = useState([]);
@@ -13,17 +39,24 @@ export default function Consultas() {
     medico: '',
     fecha: '',
     estado: '',
-    diagnostico: ''
+    diagnostico: '',
+    diagnosticoPredefinido: ''
   });
 
   const [errores, setErrores] = useState({});
+  const [filtros, setFiltros] = useState({
+    paciente: '',
+    medico: '',
+    estado: '',
+    diagnostico: ''
+  });
 
-  const ESTADO_CHOICES = [
-    { value: 'pendiente', label: 'Pendiente' },
-    { value: 'realizada', label: 'Realizada' }
-  ];
-
+  // Cargar datos iniciales
   useEffect(() => {
+    cargarDatos();
+  }, []);
+
+  const cargarDatos = () => {
     API.get('consultas/')
       .then(res => setConsultas(res.data))
       .catch(err => console.error(err));
@@ -35,12 +68,21 @@ export default function Consultas() {
     API.get('medicos/')
       .then(res => setMedicos(res.data))
       .catch(err => console.error(err));
-  }, []);
+  };
 
+  // Manejo de cambios en los inputs
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
-    // Validación de caracteres para diagnóstico
+    if (name === 'diagnosticoPredefinido') {
+      setNuevaConsulta({ 
+        ...nuevaConsulta, 
+        diagnosticoPredefinido: value,
+        diagnostico: DIAGNOSTICOS_PREDEFINIDOS.find(d => d.value === value)?.label || ''
+      });
+      return;
+    }
+    
     if (name === 'diagnostico' && !/^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\s.,;:()\-]+$/.test(value) && value !== '') {
       setError('El diagnóstico solo puede contener letras, números y signos de puntuación básicos');
       return;
@@ -50,6 +92,12 @@ export default function Consultas() {
     setNuevaConsulta({ ...nuevaConsulta, [name]: value });
   };
 
+  const handleFiltroChange = (e) => {
+    const { name, value } = e.target;
+    setFiltros({ ...filtros, [name]: value });
+  };
+
+  // Validación de campos
   const validarCampos = () => {
     const nuevosErrores = {};
     const ahora = new Date();
@@ -67,7 +115,6 @@ export default function Consultas() {
     if (!nuevaConsulta.estado) nuevosErrores.estado = "Debe seleccionar un estado.";
     if (!nuevaConsulta.diagnostico.trim()) nuevosErrores.diagnostico = "Debe ingresar un diagnóstico.";
     
-    // Validación adicional para diagnóstico
     if (nuevaConsulta.diagnostico.trim() && !/^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\s.,;:()\-]+$/.test(nuevaConsulta.diagnostico)) {
       nuevosErrores.diagnostico = "El diagnóstico contiene caracteres no válidos";
     }
@@ -75,6 +122,7 @@ export default function Consultas() {
     return nuevosErrores;
   };
 
+  // Envío del formulario
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
@@ -88,7 +136,10 @@ export default function Consultas() {
 
     setErrores({});
 
-    API.post('consultas/', nuevaConsulta)
+    // Preparar datos para enviar (eliminamos diagnosticoPredefinido que es solo para UI)
+    const { diagnosticoPredefinido, ...datosEnvio } = nuevaConsulta;
+
+    API.post('consultas/', datosEnvio)
       .then(res => {
         setConsultas([...consultas, res.data]);
         setNuevaConsulta({
@@ -96,7 +147,8 @@ export default function Consultas() {
           medico: '',
           fecha: '',
           estado: '',
-          diagnostico: ''
+          diagnostico: '',
+          diagnosticoPredefinido: ''
         });
         setSuccess('Consulta agregada con éxito');
       })
@@ -110,31 +162,135 @@ export default function Consultas() {
       });
   };
 
-  // Función para obtener la fecha mínima permitida (ahora en formato datetime-local)
+  // Funciones auxiliares
   const getMinDateTime = () => {
     const now = new Date();
-    // Ajustamos para que el datetime-local funcione correctamente
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     return now.toISOString().slice(0, 16);
   };
 
+  const filtrarConsultas = () => {
+    return consultas.filter(consulta => {
+      const pacienteMatch = filtros.paciente === '' || 
+        (consulta.paciente?.nombre && consulta.paciente.nombre.toLowerCase().includes(filtros.paciente.toLowerCase()));
+      
+      const medicoMatch = filtros.medico === '' || 
+        (consulta.medico?.nombre && consulta.medico.nombre.toLowerCase().includes(filtros.medico.toLowerCase()));
+      
+      const estadoMatch = filtros.estado === '' || 
+        consulta.estado === filtros.estado;
+      
+      const diagnosticoMatch = filtros.diagnostico === '' || 
+        (consulta.diagnostico && consulta.diagnostico.toLowerCase().includes(filtros.diagnostico.toLowerCase()));
+      
+      return pacienteMatch && medicoMatch && estadoMatch && diagnosticoMatch;
+    });
+  };
+
+  // Cálculo de estadísticas
+  const obtenerEstadisticas = () => {
+    const consultasPorEspecialidad = {};
+    const consultasPorMedico = {};
+    const medicosPorEspecialidad = {};
+    const pacientesFaltantes = {};
+    const ocupacionMedicos = {};
+
+    consultas.forEach(consulta => {
+      // Por especialidad
+      if (consulta.medico?.especialidad) {
+        consultasPorEspecialidad[consulta.medico.especialidad] = 
+          (consultasPorEspecialidad[consulta.medico.especialidad] || 0) + 1;
+        
+        if (!medicosPorEspecialidad[consulta.medico.especialidad]) {
+          medicosPorEspecialidad[consulta.medico.especialidad] = {};
+        }
+        
+        if (consulta.medico.id) {
+          medicosPorEspecialidad[consulta.medico.especialidad][consulta.medico.id] = 
+            (medicosPorEspecialidad[consulta.medico.especialidad][consulta.medico.id] || 0) + 1;
+        }
+      }
+
+      // Por médico
+      if (consulta.medico?.nombre) {
+        consultasPorMedico[consulta.medico.nombre] = 
+          (consultasPorMedico[consulta.medico.nombre] || 0) + 1;
+      }
+
+      // Ocupación de médicos
+      if (consulta.medico?.id && consulta.duracion) {
+        ocupacionMedicos[consulta.medico.id] = 
+          (ocupacionMedicos[consulta.medico.id] || 0) + parseInt(consulta.duracion);
+      }
+
+      // Pacientes faltantes
+      if (consulta.paciente?.id && consulta.asistio === false) {
+        pacientesFaltantes[consulta.paciente.id] = 
+          (pacientesFaltantes[consulta.paciente.id] || 0) + 1;
+      }
+    });
+
+    // Encontrar el médico con más consultas por especialidad
+    const medicosLideres = Object.entries(medicosPorEspecialidad).map(([especialidad, medicosObj]) => {
+      let maxConsultas = 0;
+      let medicoId = null;
+      
+      Object.entries(medicosObj).forEach(([id, count]) => {
+        if (count > maxConsultas) {
+          maxConsultas = count;
+          medicoId = id;
+        }
+      });
+
+      const medico = medicoId ? medicos.find(m => m.id === parseInt(medicoId)) : null;
+      
+      return {
+        especialidad,
+        medico: medico ? medico.nombre : 'N/A',
+        consultas: maxConsultas
+      };
+    });
+
+    // Ordenar especialidades por cantidad de consultas (de mayor a menor)
+    const especialidadesOrdenadas = Object.entries(consultasPorEspecialidad)
+      .sort((a, b) => b[1] - a[1])
+      .map(([especialidad, count]) => ({
+        especialidad,
+        count
+      }));
+
+    return {
+      especialidadesOrdenadas,
+      medicosLideres,
+      consultasPorMedico,
+      pacientesFaltantes: Object.entries(pacientesFaltantes)
+        .filter(([_, faltas]) => faltas > 2)
+        .map(([id, faltas]) => ({
+          id,
+          faltas,
+          nombre: pacientes.find(p => p.id === parseInt(id))?.nombre || 'Desconocido'
+        })),
+      medicosOcupados: Object.entries(ocupacionMedicos)
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, minutos]) => ({
+          id,
+          minutos,
+          nombre: medicos.find(m => m.id === parseInt(id))?.nombre || 'Desconocido',
+          especialidad: medicos.find(m => m.id === parseInt(id))?.especialidad || 'N/A'
+        }))
+    };
+  };
+
+  const estadisticas = obtenerEstadisticas();
+  const consultasFiltradas = filtrarConsultas();
+
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6">
       <h1 className="text-3xl font-bold text-center mb-6">Consultas</h1>
 
-      {/* Mensajes de feedback */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
-          {success}
-        </div>
-      )}
+      {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
+      {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
 
-      {/* Formulario para agregar nueva consulta */}
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mb-8 space-y-4">
         <h2 className="text-2xl font-semibold mb-4">Agregar Consulta</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -200,10 +356,23 @@ export default function Consultas() {
           </div>
 
           <div className="sm:col-span-2">
+            <div className="mb-2">
+              <select
+                name="diagnosticoPredefinido"
+                value={nuevaConsulta.diagnosticoPredefinido}
+                onChange={handleInputChange}
+                className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
+              >
+                <option value="">Seleccionar diagnóstico predefinido</option>
+                {DIAGNOSTICOS_PREDEFINIDOS.map(d => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
+            </div>
             <input
               type="text"
               name="diagnostico"
-              placeholder="Diagnóstico"
+              placeholder="O ingrese diagnóstico manualmente"
               value={nuevaConsulta.diagnostico}
               onChange={handleInputChange}
               className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
@@ -222,18 +391,136 @@ export default function Consultas() {
         </button>
       </form>
 
-      {/* Lista de consultas */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Filtrar Consultas</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <input
+              type="text"
+              name="paciente"
+              placeholder="Filtrar por paciente"
+              value={filtros.paciente}
+              onChange={handleFiltroChange}
+              className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
+            />
+          </div>
+          <div>
+            <input
+              type="text"
+              name="medico"
+              placeholder="Filtrar por médico"
+              value={filtros.medico}
+              onChange={handleFiltroChange}
+              className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
+            />
+          </div>
+          <div>
+            <select
+              name="estado"
+              value={filtros.estado}
+              onChange={handleFiltroChange}
+              className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
+            >
+              <option value="">Todos los estados</option>
+              {ESTADO_CHOICES.map(opcion => (
+                <option key={opcion.value} value={opcion.value}>{opcion.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <input
+              type="text"
+              name="diagnostico"
+              placeholder="Filtrar por diagnóstico"
+              value={filtros.diagnostico}
+              onChange={handleFiltroChange}
+              className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Estadísticas</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Especialidades con más consultas</h3>
+            <ul className="space-y-2">
+              {estadisticas.especialidadesOrdenadas.map(({especialidad, count}) => (
+                <li key={especialidad} className="flex justify-between">
+                  <span>{especialidad}</span>
+                  <span className="font-semibold">{count} consultas</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Médicos más ocupados</h3>
+            <ul className="space-y-2">
+              {estadisticas.medicosOcupados.slice(0, 5).map(medico => (
+                <li key={medico.id} className="flex flex-col">
+                  <div className="flex justify-between">
+                    <span>{medico.nombre}</span>
+                    <span className="font-semibold">{medico.minutos} minutos</span>
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    <span className="font-medium">Especialidad:</span> {medico.especialidad}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Médicos líderes por especialidad</h3>
+            <ul className="space-y-2">
+              {estadisticas.medicosLideres.map(({especialidad, medico, consultas}) => (
+                <li key={especialidad} className="flex flex-col">
+                  <div className="flex justify-between">
+                    <span>{especialidad}</span>
+                    <span className="font-semibold">{medico}</span>
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    <span className="font-medium">Consultas:</span> {consultas}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Pacientes con más de 2 faltas</h3>
+            {estadisticas.pacientesFaltantes.length > 0 ? (
+              <ul className="space-y-2">
+                {estadisticas.pacientesFaltantes.map(paciente => (
+                  <li key={paciente.id} className="flex justify-between">
+                    <span>{paciente.nombre}</span>
+                    <span className="font-semibold">{paciente.faltas} faltas</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">No hay pacientes con más de 2 faltas</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       <h2 className="text-2xl font-semibold mb-4">Historial de Consultas</h2>
+      <div className="mb-4 text-gray-600">
+        Mostrando {consultasFiltradas.length} de {consultas.length} consultas
+      </div>
       <ul className="space-y-4">
-        {consultas.length === 0 ? (
-          <li className="text-center text-gray-500">No hay consultas disponibles.</li>
+        {consultasFiltradas.length === 0 ? (
+          <li className="text-center text-gray-500">No hay consultas que coincidan con los filtros.</li>
         ) : (
-          consultas.map(consulta => (
+          consultasFiltradas.map(consulta => (
             <li key={consulta.id} className="bg-white p-4 rounded-lg shadow flex flex-col gap-1">
               <div><strong>Paciente:</strong> {consulta.paciente?.nombre || 'N/A'}</div>
               <div><strong>Médico:</strong> {consulta.medico?.nombre || 'N/A'}</div>
+              <div><strong>Especialidad:</strong> {consulta.medico?.especialidad || 'N/A'}</div>
               <div><strong>Fecha:</strong> {consulta.fecha ? new Date(consulta.fecha).toLocaleString() : 'N/A'}</div>
-              <div><strong>Estado:</strong> {consulta.estado || 'N/A'}</div>
+              <div><strong>Estado:</strong> <span className={`font-semibold ${consulta.estado === 'pendiente' ? 'text-yellow-600' : 'text-green-600'}`}>
+                {consulta.estado || 'N/A'}
+              </span></div>
               <div><strong>Diagnóstico:</strong> {consulta.diagnostico || 'N/A'}</div>
             </li>
           ))
