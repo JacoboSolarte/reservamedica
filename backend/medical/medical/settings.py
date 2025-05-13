@@ -81,7 +81,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'reservas_medicas',
         'USER': 'root',  # tu usuario MySQL
-        'PASSWORD': '987511Dff#',  # tu contraseña MySQL
+        'PASSWORD': 'Jaso#1087046900',  # tu contraseña MySQL
         'HOST': 'localhost',
         'PORT': '3306',
     }

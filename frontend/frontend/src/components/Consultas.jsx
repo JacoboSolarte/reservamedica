@@ -5,6 +5,8 @@ export default function Consultas() {
   const [consultas, setConsultas] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [medicos, setMedicos] = useState([]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const [nuevaConsulta, setNuevaConsulta] = useState({
     paciente: '',
@@ -37,22 +39,47 @@ export default function Consultas() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Validación de caracteres para diagnóstico
+    if (name === 'diagnostico' && !/^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\s.,;:()\-]+$/.test(value) && value !== '') {
+      setError('El diagnóstico solo puede contener letras, números y signos de puntuación básicos');
+      return;
+    }
+    
+    setError('');
     setNuevaConsulta({ ...nuevaConsulta, [name]: value });
   };
 
   const validarCampos = () => {
     const nuevosErrores = {};
+    const ahora = new Date();
+    const fechaSeleccionada = nuevaConsulta.fecha ? new Date(nuevaConsulta.fecha) : null;
+
     if (!nuevaConsulta.paciente) nuevosErrores.paciente = "Debe seleccionar un paciente.";
     if (!nuevaConsulta.medico) nuevosErrores.medico = "Debe seleccionar un médico.";
-    if (!nuevaConsulta.fecha) nuevosErrores.fecha = "Debe ingresar la fecha de la consulta.";
+    
+    if (!nuevaConsulta.fecha) {
+      nuevosErrores.fecha = "Debe ingresar la fecha de la consulta.";
+    } else if (fechaSeleccionada && fechaSeleccionada < ahora) {
+      nuevosErrores.fecha = "La fecha debe ser posterior a la fecha y hora actual.";
+    }
+    
     if (!nuevaConsulta.estado) nuevosErrores.estado = "Debe seleccionar un estado.";
     if (!nuevaConsulta.diagnostico.trim()) nuevosErrores.diagnostico = "Debe ingresar un diagnóstico.";
+    
+    // Validación adicional para diagnóstico
+    if (nuevaConsulta.diagnostico.trim() && !/^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\s.,;:()\-]+$/.test(nuevaConsulta.diagnostico)) {
+      nuevosErrores.diagnostico = "El diagnóstico contiene caracteres no válidos";
+    }
 
     return nuevosErrores;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError('');
+    setSuccess('');
+    
     const erroresValidados = validarCampos();
     if (Object.keys(erroresValidados).length > 0) {
       setErrores(erroresValidados);
@@ -71,13 +98,41 @@ export default function Consultas() {
           estado: '',
           diagnostico: ''
         });
+        setSuccess('Consulta agregada con éxito');
       })
-      .catch(err => console.error(err));
+      .catch(err => {
+        if (err.response && err.response.status === 400) {
+          setError('Error: Ya existe una consulta con estos datos');
+        } else {
+          setError('Error al agregar consulta');
+          console.error(err);
+        }
+      });
+  };
+
+  // Función para obtener la fecha mínima permitida (ahora en formato datetime-local)
+  const getMinDateTime = () => {
+    const now = new Date();
+    // Ajustamos para que el datetime-local funcione correctamente
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
   };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-3xl font-bold text-center mb-6">Consultas</h1>
+
+      {/* Mensajes de feedback */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
+          {success}
+        </div>
+      )}
 
       {/* Formulario para agregar nueva consulta */}
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mb-8 space-y-4">
@@ -121,6 +176,7 @@ export default function Consultas() {
               name="fecha"
               value={nuevaConsulta.fecha}
               onChange={handleInputChange}
+              min={getMinDateTime()}
               className="p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 w-full"
               required
             />
@@ -154,6 +210,7 @@ export default function Consultas() {
               required
             />
             {errores.diagnostico && <p className="text-red-500 text-sm">{errores.diagnostico}</p>}
+            <p className="text-xs text-gray-500 mt-1">Letras, números y signos básicos de puntuación</p>
           </div>
         </div>
 

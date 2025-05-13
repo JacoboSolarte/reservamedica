@@ -4,11 +4,11 @@ import API from '../api';
 export default function Especialidades() {
   const [especialidades, setEspecialidades] = useState([]);
   const [nuevaEspecialidad, setNuevaEspecialidad] = useState('');
-  const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
 
   const handleInputChange = (e) => {
     setNuevaEspecialidad(e.target.value);
-    setError(''); // Limpiar error cuando el usuario escribe
+    setMensaje({ tipo: '', texto: '' }); // Limpiar mensaje
   };
 
   const validarEspecialidad = (nombre) => {
@@ -16,35 +16,50 @@ export default function Especialidades() {
     return regex.test(nombre);
   };
 
+  const yaExisteEspecialidad = (nombre) => {
+    return especialidades.some(
+      (esp) => esp.nombre.trim().toLowerCase() === nombre.trim().toLowerCase()
+    );
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    const nombre = nuevaEspecialidad.trim();
 
-    if (!nuevaEspecialidad.trim()) {
-      setError('El nombre de la especialidad es obligatorio.');
+    if (!nombre) {
+      setMensaje({ tipo: 'error', texto: 'El nombre de la especialidad es obligatorio.' });
       return;
     }
 
-    if (!validarEspecialidad(nuevaEspecialidad.trim())) {
-      setError('El nombre debe tener al menos 3 letras y solo puede contener letras y espacios.');
+    if (!validarEspecialidad(nombre)) {
+      setMensaje({
+        tipo: 'error',
+        texto: 'El nombre debe tener al menos 3 letras y solo puede contener letras y espacios.'
+      });
       return;
     }
 
-    API.post('especialidades/', { nombre: nuevaEspecialidad.trim() })
-      .then(res => {
+    if (yaExisteEspecialidad(nombre)) {
+      setMensaje({ tipo: 'error', texto: 'La especialidad ya está registrada.' });
+      return;
+    }
+
+    API.post('especialidades/', { nombre })
+      .then((res) => {
         setEspecialidades([...especialidades, res.data]);
         setNuevaEspecialidad('');
-        setError('');
+        setMensaje({ tipo: 'exito', texto: '¡Especialidad agregada con éxito!' });
       })
-      .catch(err => {
+      .catch((err) => {
         console.error(err);
-        setError('Ocurrió un error al guardar la especialidad.');
+        setMensaje({ tipo: 'error', texto: 'Ocurrió un error al guardar la especialidad.' });
       });
   };
 
   useEffect(() => {
     API.get('especialidades/')
-      .then(res => setEspecialidades(res.data))
-      .catch(err => console.error(err));
+      .then((res) => setEspecialidades(res.data))
+      .catch((err) => console.error(err));
   }, []);
 
   return (
@@ -60,15 +75,21 @@ export default function Especialidades() {
           onChange={handleInputChange}
           placeholder="Nombre de la especialidad"
           className={`w-full p-3 border ${
-            error ? 'border-red-500' : 'border-gray-300'
+            mensaje.tipo === 'error' ? 'border-red-500' : 'border-gray-300'
           } rounded-md focus:outline-none focus:ring-2 ${
-            error ? 'focus:ring-red-500' : 'focus:ring-blue-500'
+            mensaje.tipo === 'error' ? 'focus:ring-red-500' : 'focus:ring-blue-500'
           }`}
           required
         />
 
-        {error && (
-          <p className="text-red-600 text-sm font-medium">{error}</p>
+        {mensaje.texto && (
+          <p
+            className={`text-sm font-medium ${
+              mensaje.tipo === 'error' ? 'text-red-600' : 'text-green-600'
+            }`}
+          >
+            {mensaje.texto}
+          </p>
         )}
 
         <button
@@ -85,7 +106,7 @@ export default function Especialidades() {
           {especialidades.length === 0 ? (
             <p className="text-center text-gray-500">No hay especialidades registradas.</p>
           ) : (
-            especialidades.map(especialidad => (
+            especialidades.map((especialidad) => (
               <li key={especialidad.id} className="bg-white p-4 rounded-lg shadow-md">
                 <strong className="text-lg">{especialidad.nombre}</strong>
               </li>
